@@ -1,4 +1,4 @@
-# Hardware Desk
+# HARITHA ENTERPRISES
 
 A working, database-backed hardware store management application for one Indian store branch. The data model includes branch keys for later expansion. The UI is desktop first and supports mouse-driven POS billing.
 

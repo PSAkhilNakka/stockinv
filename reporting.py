@@ -962,7 +962,7 @@ def invoice_pdf(sale, items, settings, payments):
                  _number(_field(item, "taxable_value", 0)),
                  _number(dec(_field(item, "cgst", 0)) + dec(_field(item, "sgst", 0)) + dec(_field(item, "igst", 0))),
                  _number(_field(item, "line_total", 0))] for item in items]
-        lines = [_field(settings, "store_name", "Hardware Store"), _field(settings, "address", ""),
+        lines = [_field(settings, "store_name", "HARITHA ENTERPRISES"), _field(settings, "address", ""),
                  f"GSTIN: {_field(settings, 'gstin', '')}  |  State: {_field(settings, 'state', '')} ({_field(settings, 'state_code', '')})",
                  f"Invoice: {_field(sale, 'invoice_no', '')}  |  Date: {str(_field(sale, 'sale_date', ''))[:10]}",
                  f"Customer: {_field(sale, 'customer_name', '')}  |  GSTIN: {_field(sale, 'customer_gstin', '')}  |  Place of supply: {_field(sale, 'place_of_supply_code', '')}"]
@@ -1002,7 +1002,7 @@ def invoice_pdf(sale, items, settings, payments):
     def amt(value):
         return "INR " + _number(value)
 
-    store_name = _field(settings, "store_name", "Hardware Store")
+    store_name = _field(settings, "store_name", "HARITHA ENTERPRISES")
     store_state = _field(settings, "state", "")
     store_code = str(_field(settings, "state_code", "") or "")
     store_lines = [store_name, _field(settings, "address", "")]

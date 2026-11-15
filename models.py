@@ -61,7 +61,7 @@ class StoreSettings(Base, TimestampMixin):
     __tablename__ = "store_settings"
     id = Column(Integer, primary_key=True)
     branch_id = Column(Integer, ForeignKey("branches.id", ondelete="RESTRICT"), unique=True, nullable=False)
-    store_name = Column(String(180), nullable=False, default="My Hardware Store")
+    store_name = Column(String(180), nullable=False, default="HARITHA ENTERPRISES")
     logo_path = Column(String(500))
     address = Column(Text, nullable=False, default="")
     phone = Column(String(30), nullable=False, default="")

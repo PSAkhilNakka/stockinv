@@ -1,4 +1,4 @@
-"""Hardware Desk web application and JSON API."""
+"""HARITHA ENTERPRISES web application and JSON API."""
 from __future__ import annotations
 
 import csv
