@@ -13,6 +13,26 @@ A working, database-backed hardware store management application for one Indian 
 
 All posted stock changes create an immutable movement. A sale line freezes its rate, GST and weighted average cost. Purchase and sale posting, payments and stock changes commit as one database transaction. Held bills, quotations and purchase orders do not change inventory.
 
+## Windows desktop app
+
+1. Install Python 3.12 or newer. After cloning the repository, double-click `Install HARITHA ENTERPRISES.cmd` once. It creates a local Python environment, installs the desktop dependencies, and creates a **HARITHA ENTERPRISES** desktop shortcut.
+2. Open the desktop shortcut or double-click `Start HARITHA ENTERPRISES.cmd`. The app opens in its own window. Close that window to stop the local server; open the shortcut again whenever you need the app.
+3. On a fresh device, the first launch asks you to create an administrator. The suggested username is `ravikumar`; enter your password in that local setup window. No password or database is included in GitHub.
+
+The desktop database, uploads, window profile and session key live in `%LOCALAPPDATA%\HarithaEnterprises`, outside this source directory. Closing the window keeps all committed transactions. Each normal close also creates a ZIP of the SQLite database and uploads in `%LOCALAPPDATA%\HarithaEnterprises\backups`. Copy a backup ZIP to another device if you want to transfer store data; cloning GitHub alone copies only the app code. Run one desktop window at a time on each device.
+
+To restore a desktop backup, close the app, save a copy of the current data folder, then extract `store.sqlite3` and `uploads` from the chosen ZIP into `%LOCALAPPDATA%\HarithaEnterprises`. Reopen the desktop shortcut. A restore replaces the local store data with the backup snapshot.
+
+## macOS desktop app
+
+1. Install Python 3.12 or newer with Tkinter. Clone this repository to a folder you plan to keep, then double-click `Install HARITHA ENTERPRISES.command` in Finder. It creates a Python environment, installs the desktop dependencies, and adds **HARITHA ENTERPRISES.app** to your personal `~/Applications` folder.
+2. Open **HARITHA ENTERPRISES.app** from Applications. `Start HARITHA ENTERPRISES.command` is a second way to launch it from the repository. Close the app window when finished; the local server stops and committed data stays saved.
+3. On a fresh device, create the first administrator in the local setup window. The suggested username is `ravikumar`; choose its password there. The password is not stored in the repository.
+
+The macOS app stores its SQLite database, uploads, window profile, session key, and automatic backups in `~/Library/Application Support/HarithaEnterprises`. The Applications entry points to this repository checkout and its `.venv`; keep the checkout in place, or rerun the installer after moving it. Each normal close creates a database-and-uploads ZIP in that data folder's `backups` subfolder.
+
+To move store data between Windows and Mac, close the app on both devices, copy a backup ZIP from the source device, and save a copy of the destination data folder before restoring. Extract `store.sqlite3` and `uploads` from the ZIP into the destination's data folder, replacing those items. The restored database includes the source device's user accounts; sign in with that account. Cloning GitHub alone transfers the app code, not store data.
+
 ## Setup with Docker Compose and PostgreSQL
 
 1. Install Docker Desktop. In this directory, create `.env` with a strong alphanumeric `POSTGRES_PASSWORD`, a long random `SECRET_KEY`, and optionally `S3_BUCKET`. Do not use the example secrets. Generate a key with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
@@ -24,7 +44,7 @@ For a public deployment, put the web service behind a TLS reverse proxy, restric
 
 ## Local Python setup
 
-Use Python 3.12 or newer. Install the packages in `requirements.txt`. Set `DATABASE_URL` to a PostgreSQL URL such as `postgresql+psycopg://hardware:<password>@localhost:5432/hardware` and set `SECRET_KEY` in the shell environment. Run `python manage.py init-admin --generate-password`, then `python app.py`. `APP_HOST` and `APP_PORT` control the local bind address and port. If `DATABASE_URL` is omitted, the app uses local SQLite for development and tests only.
+Use Python 3.12 or newer. Install the packages in `requirements.txt`. Set `DATABASE_URL` to a PostgreSQL URL such as `postgresql+psycopg://hardware:<password>@localhost:5432/hardware` and set `SECRET_KEY` in the shell environment. Run `python manage.py init-admin --generate-password`, then `python app.py`. `APP_HOST` and `APP_PORT` control the local bind address and port. The desktop launchers above configure a persistent SQLite database automatically. If `DATABASE_URL` is omitted when running `app.py` directly, its SQLite file is for development and tests only.
 
 On Windows PowerShell, environment variables can be set for the current terminal with `$env:DATABASE_URL='postgresql+psycopg://...'` and `$env:SECRET_KEY='...'`. The `.env.example` file documents settings but is not loaded automatically by local Python runs.
 

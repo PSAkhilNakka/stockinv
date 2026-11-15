@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 from io import BytesIO
-import os
 import re
 
 from openpyxl import Workbook
@@ -24,6 +23,7 @@ from models import (
     Purchase, PurchaseReturn, Sale, SaleReturn, StockMovement, Supplier, Unit,
 )
 from tax import dec, money
+from storage import resolve_local_upload
 
 
 ZERO = Decimal("0")
@@ -1027,8 +1027,10 @@ def invoice_pdf(sale, items, settings, payments):
                     logo_source = BytesIO(logo_bytes)
             except Exception:
                 logo_source = None
-    elif logo_path and os.path.isfile(logo_path):
-        logo_source = logo_path
+    elif logo_path:
+        resolved_logo = resolve_local_upload(str(logo_path))
+        if resolved_logo.is_file():
+            logo_source = str(resolved_logo)
     if logo_source is not None:
         try:
             source = ImageReader(logo_source)

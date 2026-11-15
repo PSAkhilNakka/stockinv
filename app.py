@@ -23,6 +23,7 @@ import models as m
 from domain import audit, base_quantity, get_product, ledger_post, next_document_no, party_balance, require_positive, stock_post
 from security import can, csrf_guard, requires
 from selling import checkout, create_quotation, preview_sale, replace_quotation_items, return_sale
+from storage import resolve_local_upload, upload_reference
 from tax import dec, money, quantity
 
 
@@ -1514,11 +1515,10 @@ def upload_attachment():
                                       ContentType=mime)
         stored_path = f"s3://{bucket}/{key}"
     else:
-        upload_root = Path(os.environ.get("UPLOAD_DIR", Path(__file__).parent / "uploads")).resolve()
-        destination = upload_root / key
+        stored_path = upload_reference(key)
+        destination = resolve_local_upload(stored_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(content)
-        stored_path = str(destination)
     record = m.Attachment(branch_id=g.user.branch_id, owner_type=owner_type, owner_id=owner.id,
                           original_name=name, stored_path=stored_path,
                           mime_type=mime,
@@ -1573,7 +1573,7 @@ def download_attachment(attachment_id):
         obj = boto3.client("s3").get_object(Bucket=bucket, Key=key)
         stream = io.BytesIO(obj["Body"].read())
     else:
-        stream = record.stored_path
+        stream = resolve_local_upload(record.stored_path)
     return send_file(stream, mimetype=record.mime_type, download_name=record.original_name)
 
 

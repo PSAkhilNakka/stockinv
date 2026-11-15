@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import io
+from importlib.util import find_spec
+import shutil
+import struct
 import tempfile
+import zlib
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -191,6 +195,8 @@ def test_attachment_upload_list_download_and_product_link(api_client, make_produ
         record = upload.get_json()
         assert record["original_name"] == "specification.pdf"
         assert record["mime_type"] == "application/pdf"
+        assert record["stored_path"].startswith("upload://")
+        assert upload_dir not in record["stored_path"]
         listed = api_client("GET", f"/api/attachments?owner_type=product&owner_id={product['id']}")
         assert len(listed) == 1 and listed[0]["id"] == record["id"]
         downloaded = api_client("GET", record["url"])
@@ -198,6 +204,87 @@ def test_attachment_upload_list_download_and_product_link(api_client, make_produ
         downloaded.close()  # Release send_file's handle before Windows removes the test directory.
         updated_product = next(row for row in api_client("GET", "/api/products") if row["id"] == product["id"])
         assert updated_product["image_path"] == record["url"]
+
+
+def _sample_png():
+    def chunk(kind, payload):
+        return (struct.pack(">I", len(payload)) + kind + payload
+                + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF))
+
+    pixels = b"\x00\xff\x00\x00\x00\xff\x00\x00\x00\x00\xff\xff\xff\x00"
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(pixels))
+            + chunk(b"IEND", b""))
+
+
+def test_local_logo_download_and_invoice_pdf_survive_upload_directory_move(api_client, make_product, monkeypatch):
+    product = make_product(opening_stock="10")
+    sale = checkout(api_client, product["id"])
+    settings = api_client("GET", "/api/settings")
+    image = _sample_png()
+
+    with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as root:
+        original = Path(root) / "first-device" / "uploads"
+        restored = Path(root) / "second-device" / "uploads"
+        monkeypatch.setenv("UPLOAD_DIR", str(original))
+        response = api_client.client.post("/api/attachments", data={
+            "owner_type": "settings", "owner_id": str(settings["id"]),
+            "file": (io.BytesIO(image), "logo.png"),
+        }, headers={"X-CSRF-Token": api_client.csrf_token}, content_type="multipart/form-data")
+        assert response.status_code == 201, response.get_data(as_text=True)
+        record = response.get_json()
+        assert record["stored_path"].startswith("upload://")
+        assert str(original) not in record["stored_path"]
+
+        restored.parent.mkdir(parents=True)
+        shutil.move(str(original), str(restored))
+        monkeypatch.setenv("UPLOAD_DIR", str(restored))
+
+        downloaded = api_client("GET", record["url"])
+        assert downloaded.data == image
+        downloaded.close()
+        pdf = api_client("GET", f"/invoices/{sale['id']}/pdf")
+        assert pdf.data.startswith(b"%PDF-")
+        if find_spec("reportlab") is not None:
+            assert b"/Subtype /Image" in pdf.data
+
+
+def test_legacy_absolute_logo_path_resolves_after_restore(api_client, make_product, monkeypatch):
+    product = make_product(opening_stock="10")
+    sale = checkout(api_client, product["id"])
+    settings = api_client("GET", "/api/settings")
+    image = _sample_png()
+
+    with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as root:
+        original = Path(root) / "first-device" / "uploads"
+        restored = Path(root) / "second-device" / "uploads"
+        monkeypatch.setenv("UPLOAD_DIR", str(original))
+        response = api_client.client.post("/api/attachments", data={
+            "owner_type": "settings", "owner_id": str(settings["id"]),
+            "file": (io.BytesIO(image), "logo.png"),
+        }, headers={"X-CSRF-Token": api_client.csrf_token}, content_type="multipart/form-data")
+        assert response.status_code == 201, response.get_data(as_text=True)
+        record = response.get_json()
+        legacy_path = original.joinpath(*record["stored_path"].removeprefix("upload://").split("/"))
+        with api_client.models.SessionLocal() as db:
+            db.get(api_client.models.Attachment, record["id"]).stored_path = str(legacy_path)
+            db.get(api_client.models.StoreSettings, settings["id"]).logo_path = str(legacy_path)
+            db.commit()
+
+        direct = api_client("GET", record["url"])
+        assert direct.data == image
+        direct.close()
+        restored.parent.mkdir(parents=True)
+        shutil.move(str(original), str(restored))
+        monkeypatch.setenv("UPLOAD_DIR", str(restored))
+        moved = api_client("GET", record["url"])
+        assert moved.data == image
+        moved.close()
+        pdf = api_client("GET", f"/invoices/{sale['id']}/pdf")
+        assert pdf.data.startswith(b"%PDF-")
+        if find_spec("reportlab") is not None:
+            assert b"/Subtype /Image" in pdf.data
 
 
 def test_public_pdf_share_can_be_revoked_and_expires(api_client, make_product):
