@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hardware Desk</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark">H</span><span><strong>Hardware Desk</strong><small>STORE MANAGEMENT</small></span></div>
+      <div class="store-badge"><span class="store-dot"></span><span id="sidebar-store">Your store</span></div>
+      <nav class="nav" id="nav" aria-label="Main navigation"></nav>
+      <div class="sidebar-bottom"><div class="user-chip"><div class="avatar" id="avatar">A</div><div><strong id="user-name">Administrator</strong><small id="user-role">Admin</small></div></div><a href="/logout" class="signout">Sign out <span aria-hidden="true">↗</span></a></div>
+    </aside>
+    <div class="main-wrap">
+      <header class="topbar"><button class="icon-button menu-toggle" id="menu-toggle" aria-label="Open menu">☰</button><div class="breadcrumb"><span id="top-section">Overview</span><b>/</b><strong id="top-title">Dashboard</strong></div><div class="top-actions"><span class="today" id="today"></span><button class="btn primary" id="top-new-sale">＋ New sale</button></div></header>
+      <main id="content" class="content" aria-live="polite"></main>
+    </div>
+  </div>
+  <div class="modal-backdrop hidden" id="modal-backdrop"><section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div>
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

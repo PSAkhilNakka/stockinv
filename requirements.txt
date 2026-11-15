@@ -1,0 +1,8 @@
+Flask>=3.0,<4
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+openpyxl>=3.1,<4
+reportlab>=4.2,<5
+boto3>=1.35,<2
+gunicorn>=23,<24
+pytest>=8,<10
