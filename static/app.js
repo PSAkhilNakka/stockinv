@@ -152,9 +152,57 @@ async function renderInventory(){
 function productForm(p={}){
   const cats=store.boot.categories||[],suppliers=store.boot.suppliers||[],units=store.boot.units||[];
   const defaultUnit=p.unit||units.find(u=>u.name.toLowerCase()==='pieces')?.symbol||units[0]?.symbol;
-  const fields=`${field('Product name','name','text',p.name,'required')}${field('SKU / item code','sku','text',p.sku,'required')}${field('Barcode (optional)','barcode','text',p.barcode)}${selectField('Category','category_id',listOptions(cats,'None'),p.category_id)}${selectField('Subcategory','subcategory_id',listOptions(cats,'None'),p.subcategory_id)}${field('Brand','brand','text',p.brand)}${selectField('Base unit','unit',units.map(u=>[u.symbol,u.name]),defaultUnit,'required')}${field('HSN code','hsn_code','text',p.hsn_code)}${field('Purchase price','purchase_price','number',p.purchase_price||0,'min="0" step="0.01" required')}${field('Selling price','selling_price','number',p.selling_price||0,'min="0" step="0.01" required')}${field('Wholesale price','wholesale_price','number',p.wholesale_price||0,'min="0" step="0.01"')}${field('MRP','mrp','number',p.mrp||0,'min="0" step="0.01"')}${field('GST rate %','gst_rate','number',p.gst_rate||0,'min="0" step="0.01" required')}${p.id?'':field('Opening stock','opening_stock','number',0,'min="0" step="0.000001"')}${field('Minimum stock','min_stock','number',minimumStock(p),'min="0" step="0.000001"')}${field('Rack / shelf','rack_location','text',p.rack_location)}${selectField('Preferred supplier','preferred_supplier_id',listOptions(suppliers,'None'),p.preferred_supplier_id)}<div class="field full"><label for="f-description">Description</label><textarea id="f-description" name="description">${esc(p.description||'')}</textarea></div>`;
+  const hasOptionalPrices=Number(p.wholesale_price||0)>0||Number(p.mrp||0)>0;
+  const fields=`
+    ${field('Product name','name','text',p.name,'required')}
+    ${field('SKU / item code','sku','text',p.sku,'required')}
+    ${field('Barcode (optional)','barcode','text',p.barcode)}
+    ${selectField('Category','category_id',listOptions(cats,'None'),p.category_id)}
+    ${selectField('Subcategory','subcategory_id',listOptions(cats,'None'),p.subcategory_id)}
+    ${field('Brand','brand','text',p.brand)}
+    ${selectField('Base unit','unit',units.map(u=>[u.symbol,u.name]),defaultUnit,'required')}
+    ${field('Purchase price','purchase_price','number',p.id?p.purchase_price??0:'','min="0" step="0.01" required')}
+    ${field('Selling price','selling_price','number',p.id?p.selling_price??0:'','min="0" step="0.01" required')}
+    ${p.id?'':'<p class="product-price-hint full">Selling price starts 40% above purchase price. You can edit it.</p>'}
+    ${field('GST rate %','gst_rate','number',p.id?p.gst_rate??0:18,'min="0" max="100" step="0.01" required')}
+    ${field('HSN code','hsn_code','text',p.hsn_code)}
+    <p id="product-hsn-note" class="product-price-hint full hidden">HSN code is required when GST is above 0%.</p>
+    <details class="product-optional-prices full" ${hasOptionalPrices?'open':''}>
+      <summary>Optional prices <span>Wholesale and MRP can be left blank</span></summary>
+      <div class="form-grid">
+        ${field('Wholesale price','wholesale_price','number',Number(p.wholesale_price||0)>0?p.wholesale_price:'','min="0" step="0.01"')}
+        ${field('MRP','mrp','number',Number(p.mrp||0)>0?p.mrp:'','min="0" step="0.01"')}
+      </div>
+    </details>
+    ${p.id?'':field('Opening stock','opening_stock','number',0,'min="0" step="0.000001"')}
+    ${field('Minimum stock','min_stock','number',minimumStock(p),'min="0" step="0.000001"')}
+    ${field('Rack / shelf','rack_location','text',p.rack_location)}
+    ${selectField('Preferred supplier','preferred_supplier_id',listOptions(suppliers,'None'),p.preferred_supplier_id)}
+    <div class="field full"><label for="f-description">Description</label><textarea id="f-description" name="description">${esc(p.description||'')}</textarea></div>`;
   showModal(p.id?'Edit product':'Add product',`<form id="product-form" class="form-grid">${fields}</form>`,`<button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-product" data-id="${esc(p.id||'')}">Save product</button>`,true);
+  $('#product-form').dataset.sellingEdited=p.id?'true':'false';
+  syncProductHsnRequirement();
 }
+function syncProductHsnRequirement(){
+  const form=$('#product-form');if(!form)return;
+  const hsn=form.elements.namedItem('hsn_code');
+  const gst=form.elements.namedItem('gst_rate');
+  const required=Boolean(store.boot.settings?.is_gst_registered&&Number(gst?.value)>0);
+  hsn.required=required;
+  form.querySelector('#product-hsn-note').classList.toggle('hidden',!required);
+}
+function syncSuggestedSellingPrice(purchase){
+  const form=purchase.closest('#product-form');
+  if(!form||form.dataset.sellingEdited==='true')return;
+  const cost=Number(purchase.value);
+  form.elements.namedItem('selling_price').value=purchase.value!==''&&Number.isFinite(cost)&&cost>=0?round2(cost*1.4).toFixed(2):'';
+}
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(el.id==='f-purchase_price'&&el.closest('#product-form'))syncSuggestedSellingPrice(el);
+  else if(el.id==='f-selling_price'&&el.closest('#product-form'))el.form.dataset.sellingEdited='true';
+  else if(el.id==='f-gst_rate'&&el.closest('#product-form'))syncProductHsnRequirement();
+});
 let productSavePending=false;
 async function saveProduct(id){if(productSavePending)return;const f=$('#product-form');if(!f.reportValidity())return;const data=formData(f);['purchase_price','selling_price','wholesale_price','mrp','gst_rate','opening_stock','min_stock'].forEach(k=>{if(data[k]!=null)data[k]=Number(data[k]);});if(store.boot.settings?.is_gst_registered&&data.gst_rate>0&&!String(data.hsn_code||'').trim())throw new Error('HSN code is required for a taxable product.');const button=$('#modal [data-action="save-product"]');productSavePending=true;if(button)button.disabled=true;try{if(id)await patch('/api/products/'+id,data);else await post('/api/products',data);closeModal();await refreshBoot();await view('products');toast(id?'Product updated':'Product added');}finally{productSavePending=false;if(button?.isConnected)button.disabled=false;}}
 function adjustProduct(id){const p=productById(id);if(!p)return;showModal('Adjust stock · '+p.name,`<div class="info-banner">Current stock: <strong>${qty(p.current_stock)} ${esc(p.unit)}</strong>. Every adjustment is recorded in stock movement history.</div><form id="adjust-form" class="form-grid">${field('Quantity change (+ or −)','quantity_delta','number','','step="0.000001" required')}${selectField('Reason','reason',[['correction','Stock count correction'],['damaged','Damaged stock'],['lost','Lost stock'],['opening','Opening correction']])}<div class="field full"><label for="adjust-note">Notes</label><textarea id="adjust-note" name="notes" required></textarea></div></form>`,`<button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-adjustment" data-id="${esc(id)}">Record adjustment</button>`);}

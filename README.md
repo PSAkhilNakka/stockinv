@@ -53,6 +53,7 @@ On Windows PowerShell, environment variables can be set for the current terminal
 ## Business setup and accounting rules
 
 - Set each product's base unit and its purchase and selling price **per base unit**. For example, a product priced at ₹2 per piece with `1 box = 50 pieces` defaults to ₹100 per box at checkout. Custom line rates are manager/admin actions.
+- For a new product, the form suggests a selling price 40% above the entered purchase price and starts GST at 18%. You can edit both values. Wholesale price and MRP are optional; saved products keep their existing prices and GST rate when reopened. Check the actual GST rate and HSN code for each item before billing.
 - A confirmed purchase increases stock at the frozen, discounted taxable cost; recoverable input GST is excluded from inventory cost. A sale records weighted average cost at posting. Changing a product's current purchase price never rewrites old documents or sale profit.
 - Returns post separate credit/debit documents, reverse the corresponding stock and ledgers, and retain the original invoice number. An invoice number is never reused.
 - A quotation must be approved by a manager or administrator before conversion. The approved lines and discount percentages are preserved, and the final invoice is posted once.
