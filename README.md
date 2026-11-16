@@ -31,6 +31,8 @@ To restore a desktop backup, close the app, save a copy of the current data fold
 
 The macOS app stores its SQLite database, uploads, window profile, session key, and automatic backups in `~/Library/Application Support/HarithaEnterprises`. The Applications entry points to this repository checkout and its `.venv`; keep the checkout in place, or rerun the installer after moving it. Each normal close creates a database-and-uploads ZIP in that data folder's `backups` subfolder.
 
+To update an existing Mac installation, close the app, run `git pull` inside the cloned repository, then reopen **HARITHA ENTERPRISES.app**. This app wrapper runs code from that checkout, and updates do not replace the local database. A product can be saved without a category; SKU and any entered barcode must be unique, including across archived products.
+
 To move store data between Windows and Mac, close the app on both devices, copy a backup ZIP from the source device, and save a copy of the destination data folder before restoring. Extract `store.sqlite3` and `uploads` from the ZIP into the destination's data folder, replacing those items. The restored database includes the source device's user accounts; sign in with that account. Cloning GitHub alone transfers the app code, not store data.
 
 ## Setup with Docker Compose and PostgreSQL

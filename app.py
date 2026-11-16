@@ -38,6 +38,38 @@ with m.SessionLocal() as setup_db:
     setup_db.commit()
 
 
+class ProductConflictError(Exception):
+    def __init__(self, field, archived=False):
+        owner = "an archived product" if archived else "another product"
+        super().__init__(f"{field} is already used by {owner}")
+
+
+def product_unique_error_field(error):
+    """Recognize only the product uniqueness rules, including SQLite and PostgreSQL."""
+    constraint = getattr(getattr(error.orig, "diag", None), "constraint_name", None)
+    if constraint == "uq_product_branch_sku":
+        return "SKU"
+    if constraint == "uq_product_branch_barcode":
+        return "Barcode"
+    message = str(error.orig).lower()
+    if "unique constraint failed:" not in message:
+        return None
+    columns = {column.strip() for column in message.split("unique constraint failed:", 1)[1].split(",")}
+    if columns == {"products.branch_id", "products.sku"}:
+        return "SKU"
+    if columns == {"products.branch_id", "products.barcode"}:
+        return "Barcode"
+    return None
+
+
+def is_unique_constraint_error(error):
+    original = error.orig
+    if getattr(original, "sqlstate", None) == "23505" or getattr(original, "pgcode", None) == "23505":
+        return True
+    message = str(original).lower()
+    return "unique constraint failed:" in message or "duplicate key value violates unique constraint" in message
+
+
 def as_json(value):
     if isinstance(value, Decimal):
         return str(value)
@@ -112,10 +144,22 @@ def invalid_value(error):
     return jsonify(error=str(error)), 400
 
 
+@app.errorhandler(ProductConflictError)
+def product_conflict(error):
+    g.db.rollback()
+    return jsonify(error=str(error)), 409
+
+
 @app.errorhandler(IntegrityError)
 def conflict(error):
+    app.logger.error("Database integrity error on %s %s: %s", request.method, request.path, error.orig)
     g.db.rollback()
-    return jsonify(error="A duplicate or conflicting record already exists"), 409
+    field = product_unique_error_field(error)
+    if request.endpoint in ("create_product", "update_product") and field:
+        return jsonify(error=f"{field} is already used by another product"), 409
+    if is_unique_constraint_error(error):
+        return jsonify(error="A record with these details already exists"), 409
+    return jsonify(error="A database constraint prevented saving this request"), 500
 
 
 @app.route("/")
@@ -243,24 +287,47 @@ def resolve_unit(name_or_id):
     return unit.id
 
 
+def check_product_identifiers(product):
+    """Check visible and archived products before an insert or update."""
+    for field, label in (("sku", "SKU"), ("barcode", "Barcode")):
+        value = getattr(product, field)
+        if not value:
+            continue
+        query = select(m.Product.id, m.Product.archived).where(
+            m.Product.branch_id == product.branch_id,
+            getattr(m.Product, field) == value,
+        )
+        if product.id is not None:
+            query = query.where(m.Product.id != product.id)
+        existing = g.db.execute(query.limit(1)).first()
+        if existing:
+            raise ProductConflictError(label, archived=existing.archived)
+
+
 def upsert_product(data, product=None):
     is_new = product is None
     if is_new:
         product = m.Product(branch_id=g.user.branch_id)
-        g.db.add(product)
     before = row_json(product) if not is_new else None
+    # Resolve a new brand before changing or adding the product: resolve_brand
+    # flushes to obtain its id, and the product is incomplete until its unit is set.
+    brand_given = "brand" in data or "brand_id" in data
+    brand_id = resolve_brand(data.get("brand_id") or data.get("brand")) if brand_given else None
+    unit_given = "base_unit_id" in data or "unit" in data
+    unit_id = resolve_unit(data.get("base_unit_id") or data.get("unit")) if unit_given else None
     for field in ("name", "sku", "barcode", "category_id", "subcategory_id", "description",
                   "purchase_price", "selling_price", "wholesale_price", "mrp", "gst_rate", "hsn_code",
                   "preferred_supplier_id", "rack_location", "image_path", "minimum_stock"):
         key = "min_stock" if field == "minimum_stock" and "min_stock" in data else field
         if key in data:
             setattr(product, field, data[key] or None if field in ("category_id", "subcategory_id", "preferred_supplier_id", "barcode", "image_path") else data[key])
-    if "brand" in data or "brand_id" in data:
-        product.brand_id = resolve_brand(data.get("brand_id") or data.get("brand"))
-    if "base_unit_id" in data or "unit" in data:
-        product.base_unit_id = resolve_unit(data.get("base_unit_id") or data.get("unit"))
+    if brand_given:
+        product.brand_id = brand_id
+    if unit_given:
+        product.base_unit_id = unit_id
     if not product.name or not product.sku or not product.base_unit_id:
         raise ValueError("Product name, SKU and base unit are required")
+    check_product_identifiers(product)
     for field in ("purchase_price", "selling_price", "wholesale_price", "mrp", "gst_rate", "minimum_stock"):
         if dec(getattr(product, field) or 0) < 0:
             raise ValueError(f"{field} cannot be negative")
@@ -268,6 +335,8 @@ def upsert_product(data, product=None):
         raise ValueError("GST percentage cannot exceed 100")
     if "archived" in data:
         product.archived = bool(data["archived"])
+    if is_new:
+        g.db.add(product)
     g.db.flush()
     if is_new:
         opening = quantity(data.get("opening_stock") or 0)
